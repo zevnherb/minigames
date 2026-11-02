@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小游戏集 · Mini Games</title>
+<meta name="description" content="四个单文件网页小游戏：落沙沙盒、分子合成、元素周期表同族三消、蜂巢扫雷。无需安装，打开即玩。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230a0e14'/><circle cx='11' cy='12' r='4' fill='%236ea8ff'/><rect x='17' y='17' width='8' height='8' rx='2' fill='%234ad991'/></svg>">
+<style>
+  :root{--bg:#0a0e14;--ink:#e8ecf4;--muted:#7f8a9e;--line:rgba(255,255,255,.10);--accent:#6ea8ff}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(120% 80% at 20% 0%,#23314a 0%,#141c29 42%,#0a0e14 100%);
+    background-attachment:fixed;color:var(--ink);min-height:100vh;
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.65
+  }
+  .wrap{max-width:1000px;margin:0 auto;padding:0 24px 80px}
+  header{padding:56px 0 34px}
+  .brand{display:flex;align-items:center;gap:11px;font-size:12.5px;letter-spacing:.2em;
+         color:var(--muted);text-transform:uppercase;margin-bottom:26px}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
+              box-shadow:0 0 14px rgba(110,168,255,.9)}
+  h1{margin:0 0 14px;font-size:clamp(28px,4.5vw,44px);font-weight:700;letter-spacing:.01em;line-height:1.2}
+  h1 .grad{background:linear-gradient(100deg,#8fc0ff,#6ea8ff 45%,#b98cff);
+           -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{margin:0;color:#b9c7dc;font-size:15px;max-width:560px}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:44px}
+  a.card{
+    display:block;text-decoration:none;color:inherit;position:relative;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:16px;
+    padding:24px 24px 22px;transition:.22s;overflow:hidden
+  }
+  a.card:hover{transform:translateY(-4px);border-color:rgba(110,168,255,.45);
+               background:rgba(110,168,255,.07);box-shadow:0 18px 44px rgba(0,0,0,.45)}
+  .num{font-size:11px;letter-spacing:.16em;color:var(--muted);margin-bottom:10px}
+  .card h2{margin:0 0 8px;font-size:19px;font-weight:650;letter-spacing:.01em}
+  .card p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.7}
+  .tags{margin-top:14px;display:flex;gap:7px;flex-wrap:wrap}
+  .tag{font-size:11px;padding:3px 9px;border-radius:999px;
+       border:1px solid rgba(255,255,255,.12);color:#9fb0c8}
+  .arrow{position:absolute;right:22px;top:22px;color:var(--muted);transition:.22s}
+  a.card:hover .arrow{color:var(--accent);transform:translateX(3px)}
+
+  footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:12.5px;display:flex;justify-content:space-between;
+         flex-wrap:wrap;gap:10px}
+  @media(max-width:700px){
+    .grid{grid-template-columns:1fr}
+    header{padding:36px 0 20px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand"><span class="dot"></span>Mini Games</div>
+    <h1>四个<span class="grad">打开就能玩</span>的小游戏</h1>
+    <p class="lead">纯 HTML 单文件，没有依赖、不联网、不用安装。手机和电脑都能玩。</p>
+  </header>
+
+  <div class="grid">
+
+    <a class="card" href="falling-sand.html">
+      <div class="arrow">→</div>
+      <div class="num">01</div>
+      <h2>落沙沙盒</h2>
+      <p>12 种物质互相反应：沙、水、油、火、酸、岩浆、植物、冰、雪。用鼠标画，看物理规则自己长出来。</p>
+      <div class="tags"><span class="tag">物理模拟</span><span class="tag">自由创造</span></div>
+    </a>
+
+    <a class="card" href="molecule-builder.html">
+      <div class="arrow">→</div>
+      <div class="num">02</div>
+      <h2>分子合成</h2>
+      <p>给一个没有标注元素的分子骨架和它的分子式，推断每个位置是什么元素。8 关，从二甲双胍到华法林。</p>
+      <div class="tags"><span class="tag">化学推理</span><span class="tag">8 关</span></div>
+    </a>
+
+    <a class="card" href="periodic-match3.html">
+      <div class="arrow">→</div>
+      <div class="num">03</div>
+      <h2>元素周期表同族三消</h2>
+      <p>同族元素连成三个才能消。默认无色模式——没有颜色提示，只能靠记住谁和谁是一族。</p>
+      <div class="tags"><span class="tag">消除</span><span class="tag">无色挑战</span></div>
+    </a>
+
+    <a class="card" href="hex-minesweeper.html">
+      <div class="arrow">→</div>
+      <div class="num">04</div>
+      <h2>蜂巢扫雷</h2>
+      <p>六边形网格的扫雷，每格 6 个邻居。比方形版更难推理，四档难度最多 169 格。</p>
+      <div class="tags"><span class="tag">逻辑</span><span class="tag">四档难度</span></div>
+    </a>
+
+  </div>
+
+  <footer>
+    <div>单文件网页游戏 · 无后端 · 无追踪</div>
+    <div>离线可用，保存后双击即可打开</div>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>蜂巢扫雷 · Hex Minesweeper</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:rgba(18,22,30,.92); --line:rgba(255,255,255,.10);
+    --ink:#e8ecf4; --muted:#7f8a9e; --accent:#6ea8ff; --ok:#4ad991; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:radial-gradient(120% 90% at 50% 0%,#172133 0%,#0d1219 48%,#080a0e 100%);
+    color:var(--ink);font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    padding:16px;overflow:hidden;
+  }
+  .head{width:min(94vw,600px);display:flex;justify-content:space-between;align-items:flex-end}
+  h1{margin:0;font-size:20px;font-weight:650;letter-spacing:.02em}
+  .sub{font-size:12px;color:var(--muted);margin-top:4px}
+  .stats{display:flex;gap:18px;text-align:right;font-variant-numeric:tabular-nums}
+  .stats div b{display:block;font-size:22px;line-height:1.1}
+  .stats div span{font-size:10.5px;color:var(--muted);letter-spacing:.12em}
+
+  .board{
+    width:min(92vw,600px);aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+    background:rgba(9,12,18,.55);border:1px solid var(--line);border-radius:18px;
+    box-shadow:0 24px 60px rgba(0,0,0,.55);position:relative;
+  }
+  svg{width:100%;height:100%;display:block;touch-action:manipulation}
+  .cell{cursor:pointer}
+  .cell polygon{transition:fill .12s,stroke .12s}
+  .cell:hover polygon{fill:#243044}
+  .cell.revealed:hover polygon{fill:#141b26}
+  .cell.flagged polygon{fill:#3a2a12}
+  .cell.mine polygon{fill:#4a1a1a}
+  .num{font-weight:750;font-size:13px;pointer-events:none;user-select:none}
+  .flag{font-size:12px;pointer-events:none;user-select:none}
+
+  .bar{width:min(92vw,600px);display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .ctl{
+    background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:9px;
+    padding:9px 15px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s
+  }
+  .ctl:hover{color:var(--ink);border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.04)}
+  .ctl.on{background:var(--accent);border-color:var(--accent);color:#06121f;font-weight:650}
+
+  .overlay{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(8,11,16,.82);border-radius:18px;backdrop-filter:blur(3px);z-index:5
+  }
+  .overlay.on{display:flex}
+  .ov{text-align:center}
+  .ov h2{margin:0 0 6px;font-size:26px}
+  .ov p{margin:0 0 16px;color:var(--muted);font-size:13px}
+  .ov button{
+    background:var(--accent);border:0;color:#06121f;font-weight:650;font-size:14px;
+    padding:11px 26px;border-radius:11px;cursor:pointer;font-family:inherit
+  }
+  .legend{font-size:11.5px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div>
+    <h1>蜂巢扫雷</h1>
+    <div class="sub">每格 6 个邻居 · 数字是周围的雷数</div>
+  </div>
+  <div class="stats">
+    <div><b id="mineLeft">0</b><span>剩余雷</span></div>
+    <div><b id="timer">0:00</b><span>用时</span></div>
+  </div>
+</div>
+
+<div class="board">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div class="overlay" id="overlay">
+    <div class="ov">
+      <h2 id="ovTitle"></h2>
+      <p id="ovText"></p>
+      <button id="ovBtn">再来一局</button>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
+  <button class="ctl on" data-d="4">入门 61</button>
+  <button class="ctl" data-d="5">进阶 91</button>
+  <button class="ctl" data-d="6">困难 127</button>
+  <button class="ctl" data-d="7">专家 169</button>
+</div>
+
+<div class="legend">
+  <span>左键翻开</span><span>右键插旗</span><span>双击数字可快速展开</span>
+</div>
+
+<script>
+"use strict";
+
+const NS = 'http://www.w3.org/2000/svg';
+const DIRS = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+const NUM_COLOR = ['', '#6ea8ff', '#4ad991', '#ff6b6b', '#c084fc', '#ffa94d', '#5ad1d1'];
+
+const svg = document.getElementById('svg');
+const overlay = document.getElementById('overlay');
+const mineLeftEl = document.getElementById('mineLeft');
+const timerEl = document.getElementById('timer');
+
+let R = 4, mineCount = 8;
+let cells = [], byKey = new Map();
+let started = false, over = false, firstMove = true;
+let revealed = 0, flags = 0, t0 = 0, timerId = null;
+const S = 34;                      // 六边形外接圆半径（像素坐标）
+
+/* ------------------------------------------------------------ 棋盘构建 */
+const key = (q, r) => q + ',' + r;
+
+function buildCells(radius) {
+  cells = [];
+  byKey.clear();
+  for (let q = -radius; q <= radius; q++) {
+    for (let r = Math.max(-radius, -q - radius); r <= Math.min(radius, -q + radius); r++) {
+      const c = { q, r, mine: false, adj: 0, state: 0 };  // 0隐藏 1翻开 2插旗
+      cells.push(c);
+      byKey.set(key(q, r), c);
+    }
+  }
+  cells.forEach(c => {
+    c.nb = [];
+    for (const [dq, dr] of DIRS) {
+      const n = byKey.get(key(c.q + dq, c.r + dr));
+      if (n) c.nb.push(n);
+    }
+  });
+}
+
+function placeMines(n, safe) {
+  const forbidden = new Set([safe, ...safe.nb]);
+  const pool = cells.filter(c => !forbidden.has(c));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  pool.slice(0, n).forEach(c => { c.mine = true; });
+  cells.forEach(c => { c.adj = c.nb.filter(n => n.mine).length; });
+}
+
+/* ---------------------------------------------------------------- 绘制 */
+function hexPoints(cx, cy, s) {
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 90);
+    pts.push([cx + s * Math.cos(a), cy + s * Math.sin(a)]);
+  }
+  return pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+}
+
+function cellXY(c) {
+  return [S * Math.sqrt(3) * (c.q + c.r / 2), S * 1.5 * c.r];
+}
+
+function render() {
+  svg.innerHTML = '';
+  const w = S * Math.sqrt(3) * (2 * R + 1) + 8;
+  const h = S * (2 + 3 * R) + 8;
+  svg.setAttribute('viewBox', (-w / 2) + ' ' + (-h / 2) + ' ' + w + ' ' + h);
+
+  cells.forEach(c => {
+    const [cx, cy] = cellXY(c);
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'cell' +
+      (c.state === 1 ? ' revealed' : '') +
+      (c.state === 2 ? ' flagged' : '') +
+      (c.mine && c.state === 1 ? ' mine' : ''));
+
+    const p = document.createElementNS(NS, 'polygon');
+    p.setAttribute('points', hexPoints(cx, cy, S - 1.6));
+    let fill = '#182130', stroke = 'rgba(255,255,255,.08)';
+    if (c.state === 1) {
+      fill = c.mine ? '#4a1a1a' : (c.adj ? '#111823' : '#0e141d');
+      stroke = 'rgba(255,255,255,.05)';
+    }
+    p.setAttribute('fill', fill);
+    p.setAttribute('stroke', stroke);
+    p.setAttribute('stroke-width', '1.2');
+    g.appendChild(p);
+
+    if (c.state === 2) {
+      const t = document.createElementNS(NS, 'text');
+      t.setAttribute('class', 'flag');
+      t.setAttribute('x', cx); t.setAttribute('y', cy + 4);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('fill', '#ffb454');
+      t.textContent = '▲';
+      g.appendChild(t);
+    } else if (c.state === 1) {
+      if (c.mine) {
+        const t = document.createElementNS(NS, 'text');
+        t.setAttribute('class', 'num');
+        t.setAttribute('x', cx); t.setAttribute('y', cy + 5);
+        t.setAttribute('text-anchor', 'middle');
+        t.setAttribute('fill', '#ff8080');
+        t.textContent = '✳';
+        g.appendChild(t);
+      } else if (c.adj) {
+        const t = document.createElementNS(NS, 'text');
+        t.setAttribute('class', 'num');
+        t.setAttribute('x', cx); t.setAttribute('y', cy + 5);
+        t.setAttribute('text-anchor', 'middle');
+        t.setAttribute('fill', NUM_COLOR[c.adj] || '#fff');
+        t.textContent = c.adj;
+        g.appendChild(t);
+      }
+    }
+
+    g.addEventListener('click', () => onReveal(c));
+    g.addEventListener('contextmenu', e => { e.preventDefault(); onFlag(c); });
+    g.addEventListener('dblclick', e => { e.preventDefault(); onChord(c); });
+
+    let lpTimer = null;
+    g.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse') return;
+      lpTimer = setTimeout(() => { onFlag(c); lpTimer = null; }, 450);
+    });
+    g.addEventListener('pointerup', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+    g.addEventListener('pointerleave', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+
+    c.el = g;
+    svg.appendChild(g);
+  });
+}
+
+function refresh(c) {
+  // 只重画受影响的格子，避免整盘重绘导致闪烁
+  const [cx, cy] = cellXY(c);
+  const old = c.el;
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('class', 'cell' +
+    (c.state === 1 ? ' revealed' : '') +
+    (c.state === 2 ? ' flagged' : '') +
+    (c.mine && c.state === 1 ? ' mine' : ''));
+  const p = document.createElementNS(NS, 'polygon');
+  p.setAttribute('points', hexPoints(cx, cy, S - 1.6));
+  let fill = '#182130', stroke = 'rgba(255,255,255,.08)';
+  if (c.state === 1) {
+    fill = c.mine ? '#4a1a1a' : (c.adj ? '#111823' : '#0e141d');
+    stroke = 'rgba(255,255,255,.05)';
+  }
+  p.setAttribute('fill', fill); p.setAttribute('stroke', stroke); p.setAttribute('stroke-width', '1.2');
+  g.appendChild(p);
+
+  if (c.state === 2) {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', cx); t.setAttribute('y', cy + 4);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'flag'); t.setAttribute('fill', '#ffb454');
+    t.textContent = '▲';
+    g.appendChild(t);
+  } else if (c.state === 1 && c.mine) {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', cx); t.setAttribute('y', cy + 5);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'num'); t.setAttribute('fill', '#ff8080');
+    t.textContent = '✳';
+    g.appendChild(t);
+  } else if (c.state === 1 && c.adj) {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', cx); t.setAttribute('y', cy + 5);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'num'); t.setAttribute('fill', NUM_COLOR[c.adj] || '#fff');
+    t.textContent = c.adj;
+    g.appendChild(t);
+  }
+
+  g.addEventListener('click', () => onReveal(c));
+  g.addEventListener('contextmenu', e => { e.preventDefault(); onFlag(c); });
+  g.addEventListener('dblclick', e => { e.preventDefault(); onChord(c); });
+  svg.replaceChild(g, old);
+  c.el = g;
+}
+
+/* ---------------------------------------------------------------- 逻辑 */
+function onReveal(c) {
+  if (over || c.state !== 0) return;
+  if (firstMove) { firstMove = false; placeMines(mineCount, c); startTimer(); }
+
+  if (c.mine) {
+    c.state = 1;
+    cells.forEach(x => { if (x.mine) x.state = 1; });
+    refreshAll();
+    endGame(false);
+    return;
+  }
+  flood(c);
+  refreshAll();
+  checkWin();
+}
+
+function flood(start) {
+  const stack = [start];
+  while (stack.length) {
+    const c = stack.pop();
+    if (c.state !== 0 || c.mine) continue;
+    c.state = 1;
+    revealed++;
+    if (c.adj === 0) {
+      for (const n of c.nb) if (n.state === 0 && !n.mine) stack.push(n);
+    }
+  }
+}
+
+function onFlag(c) {
+  if (over || c.state === 1) return;
+  if (c.state === 2) { c.state = 0; flags--; }
+  else { c.state = 2; flags++; }
+  refresh(c);
+  updateMineLeft();
+}
+
+function onChord(c) {
+  if (over || c.state !== 1 || !c.adj) return;
+  const f = c.nb.filter(n => n.state === 2).length;
+  if (f !== c.adj) return;
+  const targets = c.nb.filter(n => n.state === 0);
+  const mineHit = targets.find(n => n.mine);
+  if (mineHit) {
+    mineHit.state = 1;
+    cells.forEach(x => { if (x.mine) x.state = 1; });
+    refreshAll(); endGame(false); return;
+  }
+  targets.forEach(n => flood(n));
+  refreshAll();
+  checkWin();
+}
+
+function refreshAll() { cells.forEach(refresh); }
+
+function checkWin() {
+  const need = cells.length - mineCount;
+  if (revealed >= need) {
+    cells.forEach(c => { if (c.mine && c.state === 0) { c.state = 2; flags++; } });
+    refreshAll();
+    endGame(true);
+  }
+}
+
+function updateMineLeft() {
+  mineLeftEl.textContent = Math.max(0, mineCount - flags);
+}
+
+function startTimer() {
+  t0 = Date.now();
+  timerId = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    timerEl.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }, 250);
+}
+
+function endGame(won) {
+  over = true;
+  if (timerId) clearInterval(timerId);
+  document.getElementById('ovTitle').textContent = won ? '清雷完成 ✓' : '踩雷了';
+  document.getElementById('ovTitle').style.color = won ? 'var(--ok)' : 'var(--bad)';
+  document.getElementById('ovText').textContent = won
+    ? '用时 ' + timerEl.textContent
+    : '再试一次，首击一定是安全的';
+  overlay.classList.add('on');
+}
+
+/* ---------------------------------------------------------------- 开局 */
+function newGame(radius, mines) {
+  R = radius;
+  mineCount = mines;
+  started = false; over = false; firstMove = true;
+  revealed = 0; flags = 0;
+  if (timerId) clearInterval(timerId);
+  timerEl.textContent = '0:00';
+  overlay.classList.remove('on');
+  buildCells(R);
+  render();
+  updateMineLeft();
+}
+
+document.querySelectorAll('.bar .ctl').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.bar .ctl').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    const d = parseInt(b.dataset.d, 10);
+    const mines = { 4: 8, 5: 14, 6: 22, 7: 32 }[d];
+    newGame(d, mines);
+  };
+});
+document.getElementById('ovBtn').onclick = () => {
+  const d = parseInt(document.querySelector('.bar .ctl.on').dataset.d, 10);
+  newGame(d, { 4: 8, 5: 14, 6: 22, 7: 32 }[d]);
+};
+
+newGame(4, 8);
+
+/* --------------------------------------------------- 自检（#selftest） */
+if (location.hash === '#selftest') {
+  const res = [];
+  const ok = (n, c) => res.push((c ? 'PASS ' : 'FAIL ') + n);
+
+  // 1. 六边形棋盘数量（半径 2 应为 19 格）
+  buildCells(2);
+  ok('boardCount19', cells.length === 19);
+
+  // 2. 中心格应有 6 个邻居
+  const center = byKey.get(key(0, 0));
+  ok('centerNeighbors6', center.nb.length === 6);
+
+  // 3. 角落格邻居更少
+  const corner = byKey.get(key(2, 0));
+  ok('cornerLess6', corner.nb.length < 6);
+
+  // 4. 人工布雷后相邻计数正确：(0,1) 挨着两颗雷，(1,1) 只挨着一颗
+  buildCells(2);
+  const m = [byKey.get(key(0, 0)), byKey.get(key(1, 0))];
+  m.forEach(c => { c.mine = true; });
+  cells.forEach(c => { c.adj = c.nb.filter(n => n.mine).length; });
+  ok('adjacency2', byKey.get(key(0, 1)).adj === 2);
+  ok('adjacency1', byKey.get(key(1, 1)).adj === 1);
+
+  // 5. 洪泛展开 0 区域
+  buildCells(2);
+  const safe = byKey.get(key(0, 0));
+  placeMines(0, safe);           // 无雷
+  revealed = 0;
+  flood(safe);
+  ok('floodAll', revealed === cells.length);
+
+  // 6. 插旗计数
+  buildCells(2);
+  const f1 = byKey.get(key(1, 1));
+  f1.state = 2; flags = 1;
+  ok('flagCount', flags === 1 && f1.state === 2);
+
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'position:fixed;inset:0;background:#0a0e14;color:#e8ecf4;' +
+    'font:600 22px/2 monospace;padding:40px;z-index:999;margin:0;white-space:pre-wrap';
+  pre.textContent = res.join('\n');
+  document.body.appendChild(pre);
+}
+</script>
+</body>
+</html>
